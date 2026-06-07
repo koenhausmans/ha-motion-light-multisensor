@@ -167,7 +167,7 @@ variables:
       {% if auto_high %}
         {% set lat = state_attr('zone.home', 'latitude') | float(45) %}
         {% set doy = now().strftime('%j') | int %}
-        {% set decl = -23.45 * cos( (360 / 365 * (doy + 10)) | radians ) %}
+        {% set decl = -23.45 * cos( (360 / 365 * (doy + 10)) * pi / 180 ) %}
         {% set elev_high = 90 - ((lat - decl) | abs) %}
       {% else %}
         {% set elev_high = elev_high_fixed %}
