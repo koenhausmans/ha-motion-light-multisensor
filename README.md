@@ -12,18 +12,27 @@ occupied, and optional manual-override protection.
 
 ```
 .
+├── AGENTS.md                        # guidance for AI agents
+├── LICENSE
 ├── README.md
 └── motion_light_multisensor.yaml   # the blueprint
 ```
 
+The repository lives at
+[github.com/koenhausmans/ha-motion-light-multisensor](https://github.com/koenhausmans/ha-motion-light-multisensor).
+
 ## Install (one-click import)
 
-Click the badge (replace `<you>`/`<repo>` and branch if needed):
+Click the badge:
 
-[![Open your Home Assistant instance and show the blueprint import dialog.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2F<you>%2F<repo>%2Fmain%2Fmotion_light_multisensor.yaml)
+[![Open your Home Assistant instance and show the blueprint import dialog.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fkoenhausmans%2Fha-motion-light-multisensor%2Fmaster%2Fmotion_light_multisensor.yaml)
 
 Or manually: **Settings → Automations & Scenes → Blueprints → Import Blueprint**,
-and paste the raw URL of `motion_light_multisensor.yaml`.
+and paste this raw URL:
+
+```
+https://raw.githubusercontent.com/koenhausmans/ha-motion-light-multisensor/master/motion_light_multisensor.yaml
+```
 
 Native import is a one-time copy — to update, re-import the same URL (it overwrites
 the existing blueprint of the same name).
