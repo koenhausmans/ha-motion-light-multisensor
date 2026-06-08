@@ -61,6 +61,15 @@ reintroduces a real failure.
   `90 - |latitude - declination|` from `zone.home` latitude and day-of-year; when it is
   enabled, low thresholds must stay at/below 0° or the elevation span collapses in winter
   and brightness pins to min.
+- **Sun-based color temperature** (`target_color_temp` template) is likewise duplicated
+  verbatim in both files — keep it in sync with `target_brightness`. It deliberately reuses
+  the *same* elevation→`factor` math (warm at low sun, cool at high sun:
+  `warm_k + (cool_k - warm_k) * factor`) so color and brightness track one curve. It is
+  injected — only when the opt-in `dynamic_color` is on — into exactly the `light.turn_on`
+  calls that set `brightness_pct` (motion / single-press turn-on and the timed tick), by
+  templating the whole `data:` block and `combine`-ing in `color_temp_kelvin`. **Never** add
+  color to `scene.turn_on` (scenes own their color) or to the Hue `brightness_step_pct`
+  up/down keys (manual adjustments).
 
 ### `switch_light_scenes.yaml`
 

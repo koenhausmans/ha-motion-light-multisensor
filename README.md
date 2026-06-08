@@ -141,6 +141,13 @@ lights are dim around dawn/dusk and brighter at midday. The math (see the
 4. **Scale.** `brightness = brightness_min + (brightness_max − brightness_min) · factor`,
    rounded and clamped to `1…100 %`.
 
+**Optional: sun-based color temperature.** Enable `dynamic_color` and the lights' color
+temperature follows the *same* `factor` curve as brightness — warm when the sun is low,
+cool at peak sun — via `color_temp = warm_k + (cool_k − warm_k) · factor`. It's applied on
+the same turn-on and timed-refresh as brightness, so color and brightness track together.
+This is **opt-in** (default off) and only affects lights that support color temperature;
+scene activations and the Hue up/down brightness keys are left untouched.
+
 **Which setting controls what:**
 
 | Setting | Controls |
@@ -151,6 +158,8 @@ lights are dim around dawn/dusk and brighter at midday. The math (see the
 | `elevation_high` | Sun angle where the ramp *reaches max* (fixed mode) |
 | `auto_elevation_high` | If on, sets the high angle to today's solar-noon elevation (`90 − \|latitude − declination\|`) so midday is full brightness year-round; `elevation_high` is then ignored |
 | `dynamic_brightness` / `fixed_brightness` | Turn the whole sun engine off and use a flat brightness instead |
+| `dynamic_color` | If on, color temperature also follows the sun (same curve as brightness); off by default |
+| `color_temp_warm` / `color_temp_cool` | Color temperature (K) at low sun / high sun — the warm and cool ends of the curve |
 
 ### Tuning `elevation_high`
 
