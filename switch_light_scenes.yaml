@@ -177,6 +177,29 @@ blueprint:
       selector:
         number: { min: 1, max: 100, unit_of_measurement: "%", mode: slider }
 
+    dynamic_color:
+      name: Use sun-based color temperature
+      description: >
+        If on, color temperature also follows the sun on the same curve as
+        brightness — warm when the sun is low, cool at peak sun. Only affects
+        lights that support color temperature. Independent of the brightness
+        toggle above.
+      default: false
+      selector:
+        boolean: {}
+
+    color_temp_warm:
+      name: Warm color temperature – low sun (K)
+      default: 2200
+      selector:
+        number: { min: 2000, max: 6500, step: 50, unit_of_measurement: "K", mode: box }
+
+    color_temp_cool:
+      name: Cool color temperature – high sun (K)
+      default: 4000
+      selector:
+        number: { min: 2000, max: 6500, step: 50, unit_of_measurement: "K", mode: box }
+
     brightness_update_interval:
       name: Brightness update frequency
       description: How often to refresh sun-based brightness while lights are on.
@@ -248,6 +271,9 @@ variables:
   elev_low_evening: !input elevation_low_evening
   auto_high: !input auto_elevation_high
   elev_high_fixed: !input elevation_high
+  use_color: !input dynamic_color
+  warm_k: !input color_temp_warm
+  cool_k: !input color_temp_cool
   helper: !input last_auto_helper
   override_tol: !input override_tolerance
   target_brightness: >
@@ -273,6 +299,26 @@ variables:
     {% else %}
       {{ fixed_b }}
     {% endif %}
+  # Sun-based color temperature (K). Reuses the SAME elevation→factor curve as
+  # target_brightness so color and brightness track together: factor 0 (low sun)
+  # = warm, factor 1 (high sun) = cool. Only injected when use_color is on.
+  target_color_temp: >
+    {% set elevation = state_attr('sun.sun', 'elevation') | float(-90) %}
+    {% set rising = state_attr('sun.sun', 'rising') %}
+    {% set elev_low = elev_low_morning if rising else elev_low_evening %}
+    {% if auto_high %}
+      {% set lat = state_attr('zone.home', 'latitude') | float(45) %}
+      {% set doy = now().strftime('%j') | int %}
+      {% set decl = -23.45 * cos( (360 / 365 * (doy + 10)) * pi / 180 ) %}
+      {% set elev_high = 90 - ((lat - decl) | abs) %}
+    {% else %}
+      {% set elev_high = elev_high_fixed %}
+    {% endif %}
+    {% set span = elev_high - elev_low %}
+    {% set frac = ((elevation - elev_low) / span) if span > 0 else 0 %}
+    {% set frac = [[frac, 0] | max, 1] | min %}
+    {% set factor = (1 - cos(frac * pi)) / 2 %}
+    {{ (warm_k + (cool_k - warm_k) * factor) | round(0) | int }}
   # Lights to refresh on a tick: currently ON, and (if a helper is configured)
   # still at the last automatic value (i.e. not manually dimmed or scene-set).
   tick_targets: >
@@ -378,8 +424,9 @@ action:
               - service: light.turn_on
                 target:
                   entity_id: !input lights
-                data:
-                  brightness_pct: "{{ target_brightness }}"
+                data: >
+                  {{ {"brightness_pct": target_brightness}
+                     | combine({"color_temp_kelvin": target_color_temp} if use_color else {}) }}
               - if:
                   - "{{ (helper is string) and (helper | length > 0) }}"
                 then:
@@ -405,8 +452,9 @@ action:
               - service: light.turn_on
                 target:
                   entity_id: !input lights
-                data:
-                  brightness_pct: "{{ target_brightness }}"
+                data: >
+                  {{ {"brightness_pct": target_brightness}
+                     | combine({"color_temp_kelvin": target_color_temp} if use_color else {}) }}
               - if:
                   - "{{ (helper is string) and (helper | length > 0) }}"
                 then:
@@ -478,8 +526,9 @@ action:
                       - service: light.turn_on
                         target:
                           entity_id: !input lights
-                        data:
-                          brightness_pct: "{{ target_brightness }}"
+                        data: >
+                          {{ {"brightness_pct": target_brightness}
+                             | combine({"color_temp_kelvin": target_color_temp} if use_color else {}) }}
                       - if:
                           - "{{ (helper is string) and (helper | length > 0) }}"
                         then:
@@ -609,9 +658,9 @@ action:
           - service: light.turn_on
             target:
               entity_id: "{{ tick_targets }}"
-            data:
-              brightness_pct: "{{ target_brightness }}"
-              transition: 2
+            data: >
+              {{ {"brightness_pct": target_brightness, "transition": 2}
+                 | combine({"color_temp_kelvin": target_color_temp} if use_color else {}) }}
           - if:
               - "{{ (helper is string) and (helper | length > 0) }}"
             then:
