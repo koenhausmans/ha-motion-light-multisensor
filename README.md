@@ -60,17 +60,26 @@ are supported, and you can use either or both (leave the other device empty):
 
 | Press | Shelly (`single_push` button) | Hue / Zigbee2MQTT dimmer (`action`) |
 |---|---|---|
-| Single / ON | **Toggle** — off → on at sun-based brightness; on → off | `on_press` → on at sun-based brightness · `off_press` → off |
-| Double | Next scene: advance the input_select, then activate that scene | — |
-| Triple | Advance two scenes, then activate the result | — |
+| Single / ON | **Toggle** — off → on at sun-based brightness; on → off | `on_press` → on at sun-based brightness |
+| Double | Next scene: advance the input_select, then activate that scene | `on_press` ×2 → next scene *(needs multi-press helper)* |
+| Triple | Advance two scenes, then activate the result | `on_press` ×3 → two scenes forward *(needs multi-press helper)* |
+| Off | — | `off_press` → off |
 | Up / Down | — | `up_press` / `down_press` → step brightness ±step% |
 
 Whenever the lights are turned **off** (Shelly toggle-off or Hue `off_press`), the scene
 `input_select` is reset to its **first** option.
 
-- **Scene cycling is Shelly-only** (a single-button Shelly exposes single/double/triple
-  push; a Hue dimmer has no multi-press). **Brightness stepping is Hue-only** (it has
-  dedicated up/down keys). This mirrors the hardware.
+- **The Shelly cycles scenes natively** (a single-button Shelly exposes single/double/triple
+  push). **The Hue ON key cycles scenes via _virtual_ multi-press** — the dimmer has no
+  native double/triple, so presses are counted in software. This is **opt-in**: it only
+  activates when you assign the multi-press `input_text` helper below. Leave the helper
+  empty and the Hue ON key fires a single press instantly, exactly as before.
+- **Multi-press latency:** when the helper is configured, a single and a double ON press
+  act only after the configured max-delay window (default 500 ms), since the automation
+  must wait to see whether more presses follow. A triple fires immediately on the third
+  press. The Shelly is unaffected (its multi-press is native).
+- **Brightness stepping is Hue-only** (it has dedicated up/down keys). This mirrors the
+  hardware.
 - The scene `input_select`'s options must be scene **entity_ids** (e.g.
   `scene.bedroom_relax`). Cycling selects the next option, then calls `scene.turn_on` on
   that value.
@@ -94,6 +103,10 @@ https://raw.githubusercontent.com/koenhausmans/ha-smart-lighting-blueprints/mast
 - An `input_select` helper whose options are scene entity_ids (e.g.
   `input_select.bedroom_scene_entities`).
 - A Shelly button and/or a Hue (MQTT / Zigbee2MQTT) dimmer device.
+- *(Optional, for Hue scene cycling)* an `input_text` helper — **one per automation
+  instance** — assigned to the multi-press helper input. It stores the last ON event so
+  double/triple presses can be detected. Leave it empty to keep the Hue ON key instant
+  (single press only).
 
 ---
 

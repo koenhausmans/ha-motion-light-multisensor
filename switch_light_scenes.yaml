@@ -76,6 +76,36 @@ blueprint:
       selector:
         number: { min: 1, max: 50, unit_of_measurement: "%", mode: box }
 
+    helper_last_controller_event:
+      name: Virtual multi-press helper (input_text, optional)
+      description: >
+        An input_text helper used to detect double / triple presses on the Hue
+        ON key (which has no native multi-press). The automation stores the last
+        ON event here as JSON. Use a UNIQUE helper per automation instance.
+        Leave empty to disable multi-press — the Hue ON key then fires instantly
+        (single press only). Has no effect on the Shelly, which has native
+        single / double / triple push.
+      default: []
+      selector:
+        entity:
+          domain: input_text
+
+    helper_double_press_delay:
+      name: Multi-press max delay (ms)
+      description: >
+        Maximum gap between Hue ON presses that still counts as the same gesture.
+        When the helper above is set, a single and a double ON press act only
+        after this delay (a triple acts immediately on the third press). Only
+        used when the helper is configured.
+      default: 500
+      selector:
+        number:
+          min: 100
+          max: 5000
+          step: 10
+          unit_of_measurement: milliseconds
+          mode: box
+
     dynamic_brightness:
       name: Use sun-based brightness
       description: If off, the fixed brightness below is always used on turn-on.
@@ -138,13 +168,31 @@ blueprint:
       selector:
         number: { min: 1, max: 100, unit_of_measurement: "%", mode: slider }
 
-mode: queued
+mode: parallel
 max: 10
 
 variables:
   light_entities: !input lights
   scene_select: !input scene_input_select
   step: !input brightness_step
+  evt_helper: !input helper_last_controller_event
+  dp_delay: !input helper_double_press_delay
+  # Virtual multi-press is enabled only when an input_text helper is configured.
+  dp_enabled: "{{ (evt_helper is string) and (evt_helper | length > 0) }}"
+  # Press count for THIS ON press. Self-contained (references only the !input
+  # vars, per the AGENTS.md evaluation-order rule): parse the PREVIOUS ON event
+  # from the helper, and increment the streak when it landed within the delay
+  # window, else start a fresh single. Capped at 3 (triple). Guarded so an
+  # empty / non-JSON helper can't raise.
+  on_count: >-
+    {% set v = states(evt_helper) if (evt_helper is string and evt_helper | length > 0) else '' %}
+    {% set p = (v | from_json) if (v is string and v.startswith('{')) else {} %}
+    {% set delta_ms = (as_timestamp(now()) - (p.t | default(0) | float(0))) * 1000 %}
+    {% if p.a | default('') == 'on_press' and (delta_ms | int) <= (dp_delay | int) %}
+      {{ [ (p.n | default(0) | int) + 1, 3] | min }}
+    {% else %}
+      1
+    {% endif %}
   b_max: !input brightness_max
   b_min_morning: !input brightness_min_morning
   b_min_evening: !input brightness_min_evening
@@ -261,22 +309,84 @@ action:
                 data:
                   brightness_pct: "{{ target_brightness }}"
 
-      # Hue ON key: turn all on at target brightness.
+      # Hue ON key: virtual single / double / triple press.
+      #   - helper not configured  → turn on at target brightness immediately.
+      #   - configured             → count presses (see variables.on_count):
+      #       triple (3) fires immediately (two scenes forward);
+      #       single (1) / double (2) act after the delay, but only if no later
+      #       press has overwritten the helper (post-delay re-check).
       - conditions:
           - condition: trigger
             id: light_on
         sequence:
-          - service: light.turn_on
-            target:
-              entity_id: !input lights
-            data:
-              brightness_pct: "{{ target_brightness }}"
+          - if:
+              - "{{ not dp_enabled }}"
+            then:
+              - service: light.turn_on
+                target:
+                  entity_id: !input lights
+                data:
+                  brightness_pct: "{{ target_brightness }}"
+            else:
+              - variables:
+                  this_ts: "{{ as_timestamp(now()) }}"
+              - service: input_text.set_value
+                target:
+                  entity_id: !input helper_last_controller_event
+                data:
+                  value: '{{ {"a": "on_press", "n": on_count | int, "t": this_ts} | to_json }}'
+              - if:
+                  - "{{ on_count | int >= 3 }}"
+                then:
+                  # Triple: two scenes forward, activate. Terminal gesture — act now.
+                  - service: input_select.select_next
+                    target:
+                      entity_id: !input scene_input_select
+                  - service: input_select.select_next
+                    target:
+                      entity_id: !input scene_input_select
+                  - service: scene.turn_on
+                    target:
+                      entity_id: "{{ states(scene_select) }}"
+                else:
+                  # Single / double: wait, then only act if still the latest press.
+                  - delay:
+                      milliseconds: "{{ dp_delay | int }}"
+                  - condition: template
+                    value_template: >
+                      {{ (states(evt_helper) | from_json).t | float(0) == this_ts }}
+                  - if:
+                      - "{{ on_count | int == 2 }}"
+                    then:
+                      # Double: one scene forward, activate.
+                      - service: input_select.select_next
+                        target:
+                          entity_id: !input scene_input_select
+                      - service: scene.turn_on
+                        target:
+                          entity_id: "{{ states(scene_select) }}"
+                    else:
+                      # Single: turn on at target brightness.
+                      - service: light.turn_on
+                        target:
+                          entity_id: !input lights
+                        data:
+                          brightness_pct: "{{ target_brightness }}"
 
       # Hue OFF key: turn all off and reset the scene list to its first option.
       - conditions:
           - condition: trigger
             id: light_off
         sequence:
+          # Invalidate any pending ON single/double run (post-delay re-check fails).
+          - if:
+              - "{{ dp_enabled }}"
+            then:
+              - service: input_text.set_value
+                target:
+                  entity_id: !input helper_last_controller_event
+                data:
+                  value: '{{ {"a": "off_press", "t": as_timestamp(now())} | to_json }}'
           - service: light.turn_off
             target:
               entity_id: !input lights
@@ -318,6 +428,14 @@ action:
           - condition: trigger
             id: bright_up
         sequence:
+          - if:
+              - "{{ dp_enabled }}"
+            then:
+              - service: input_text.set_value
+                target:
+                  entity_id: !input helper_last_controller_event
+                data:
+                  value: '{{ {"a": "up_press", "t": as_timestamp(now())} | to_json }}'
           - service: light.turn_on
             target:
               entity_id: !input lights
@@ -330,6 +448,14 @@ action:
           - condition: trigger
             id: bright_down
         sequence:
+          - if:
+              - "{{ dp_enabled }}"
+            then:
+              - service: input_text.set_value
+                target:
+                  entity_id: !input helper_last_controller_event
+                data:
+                  value: '{{ {"a": "down_press", "t": as_timestamp(now())} | to_json }}'
           - service: light.turn_on
             target:
               entity_id: !input lights

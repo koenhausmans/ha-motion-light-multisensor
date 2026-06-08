@@ -78,8 +78,25 @@ reintroduces a real failure.
   input_select's options are scene entity_ids).
 - **Up/down use `brightness_step_pct`** (`+step` / `-step`), not absolute brightness, so
   HA clamps and applies the delta.
-- **`mode: queued` (with `max`)**, not `restart` — rapid presses must queue, not cancel an
-  in-flight scene activation.
+- **`mode: parallel` (with `max`)** — NOT `queued` and NOT `restart`. The Hue virtual
+  multi-press counts overlapping runs (see below): `queued` serialises them so the second
+  press can't start until the first run's delay ends (double/triple never detected), and
+  `restart` would cancel an in-flight Shelly scene activation. Parallel keeps "rapid
+  presses are never dropped" while letting the counting runs overlap.
+- **Virtual multi-press is Hue-ON-only and opt-in.** The Hue ON key has no native
+  multi-press, so it is counted in software using an optional `input_text` helper
+  (`helper_last_controller_event`) storing `{"a","n","t"}` and a max-delay input
+  (`helper_double_press_delay`). The `on_count` variable is self-contained (parses the
+  helper itself, referencing only `!input`s per the evaluation-order rule) and increments
+  the prior ON streak only when the previous event was `on_press` within the delay window,
+  capped at 3. **Triple acts immediately** at count 3;
+  **single/double act after the delay**, gated by a post-delay re-check that the helper's
+  `t` still equals the `this_ts` this run wrote (a later press overwrites it → the stale
+  run aborts — this is what makes parallel mode correct without `restart`). When enabled,
+  **every Hue key stamps the helper first** (off/up/down too) so a following press
+  invalidates a pending ON single/double. When the helper is empty (`dp_enabled` false)
+  the ON key turns on instantly and no key touches the helper. The Shelly keeps its
+  **native** single/double/triple and never touches the helper.
 - **Device inputs are optional** (`shelly_device` / `hue_device` default to empty) so a
   user with one hardware family isn't forced to select the other. The `shelly_button`
   subtype varies by model (`button1` vs `button`) and is a configurable input.
