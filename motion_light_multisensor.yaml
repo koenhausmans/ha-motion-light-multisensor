@@ -1,3 +1,6 @@
+# Motion Light (multi-sensor) — Home Assistant automation blueprint
+# Copyright (c) 2026 Koen Hausmans — MIT License
+# Source: https://github.com/koenhausmans/ha-smart-lighting-blueprints
 blueprint:
   name: Motion Light – multi-sensor, sun-based brightness, live updates
   description: >
