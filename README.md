@@ -143,6 +143,12 @@ cancelled and re-armed automatically (`mode: restart`).
 - **The phone target must be a Home Assistant Companion app service** (e.g.
   `notify.mobile_app_pixel`). Only the Companion app emits the
   `mobile_app_notification_action` event that the Acknowledge button uses to stop the loop.
+  To find yours, open **Developer Tools → Actions** and type `notify.mobile_app` — it
+  autocompletes one service per phone, named after the device you set when installing the
+  Companion app (e.g. `notify.mobile_app_koen_iphone`, `notify.mobile_app_galaxy_s24`).
+  Paste that value into the **Phone notify service** input. It must be a `mobile_app_*`
+  service — WhatsApp, `persistent_notification`, and laptop services can't acknowledge and
+  belong in **Extra targets** below.
 - **Extra targets** (one notify service per line) mirror the text but can't acknowledge —
   a laptop Companion service, `notify.persistent_notification`, or a **WhatsApp** bridge.
   WhatsApp-to-self works via a delivery-only bridge such as **CallMeBot** (free) or
@@ -166,6 +172,8 @@ https://raw.githubusercontent.com/koenhausmans/ha-smart-lighting-blueprints/mast
 - One **`input_boolean`** helper (Settings → Devices & Services → Helpers → Toggle),
   assigned to the cycle-in-progress input. It remembers a cycle is running.
 - A Home Assistant **Companion app** notify service for the phone (the Acknowledge target).
+  Find it under **Developer Tools → Actions** by typing `notify.mobile_app` — pick the
+  entry for your phone (e.g. `notify.mobile_app_pixel`).
 - *(Optional)* any additional `notify.*` services to mirror the message to.
 
 ---
